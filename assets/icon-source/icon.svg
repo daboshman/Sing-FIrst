@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#5B21B6"/><stop offset="1" stop-color="#2B1055"/>
+    </linearGradient>
+    <linearGradient id="mic" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF7AB6"/><stop offset="1" stop-color="#FF2E86"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g transform="translate(25.599999999999994 34.599999999999994) scale(0.9)">
+  <!-- crown + side button of the stopwatch -->
+  <rect x="222" y="22" width="68" height="38" rx="14" fill="#FFD23F"/>
+  <rect x="244" y="54" width="24" height="44" fill="#FFD23F"/>
+  <rect x="368" y="96" width="52" height="30" rx="12" fill="#FFD23F"
+        transform="rotate(45 394 111)"/>
+  <!-- ring: faint track + 3/4 countdown arc starting at 12 o'clock -->
+  <circle cx="256" cy="282" r="168" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="36"/>
+  <circle cx="256" cy="282" r="168" fill="none" stroke="#FFD23F" stroke-width="36"
+          stroke-linecap="round" stroke-dasharray="791.7 1055.6"
+          transform="rotate(-90 256 282)"/>
+  <!-- microphone -->
+  <rect x="202" y="164" width="108" height="164" rx="54" fill="url(#mic)"/>
+  <g stroke="rgba(120,0,60,0.28)" stroke-width="10" stroke-linecap="round">
+    <line x1="226" y1="212" x2="286" y2="212"/>
+    <line x1="226" y1="240" x2="286" y2="240"/>
+    <line x1="226" y1="268" x2="286" y2="268"/>
+  </g>
+  <g fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round">
+    <path d="M 174 276 a 82 82 0 0 0 164 0"/>
+    <line x1="256" y1="358" x2="256" y2="390"/>
+    <line x1="216" y1="392" x2="296" y2="392"/>
+  </g></g>
+</svg>
