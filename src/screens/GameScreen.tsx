@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ApiKeyModal } from '../components/ApiKeyModal';
 import { FeedbackPanel, type FeedbackKind } from '../components/FeedbackPanel';
 import { Header } from '../components/Header';
 import { RecordButton } from '../components/RecordButton';
@@ -10,7 +9,6 @@ import { TranscriptBox } from '../components/TranscriptBox';
 import { WordCard } from '../components/WordCard';
 import { pickRandomWord } from '../data/words';
 import { useRecorder } from '../hooks/useRecorder';
-import { clearApiKey, loadApiKey, saveApiKey } from '../services/apiKey';
 import { transcribeAudio } from '../services/transcribe';
 import { colors, useScale } from '../theme';
 import { transcriptContainsWord } from '../utils/matchWord';
@@ -32,19 +30,12 @@ export function GameScreen() {
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>('none');
 
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
   const recordingRef = useRef(false);
   const startedAtRef = useRef(0);
   const autoStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextWordTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    loadApiKey().then((key) => {
-      setApiKey(key);
-      if (!key) setSettingsOpen(true);
-    });
     return () => {
       if (autoStopTimer.current) clearTimeout(autoStopTimer.current);
       if (nextWordTimer.current) clearTimeout(nextWordTimer.current);
@@ -87,14 +78,10 @@ export function GameScreen() {
       showFeedback('failure', 'That was too short — sing a bit more!');
       return;
     }
-    if (!apiKey) {
-      setSettingsOpen(true);
-      return;
-    }
 
     setIsProcessing(true);
     try {
-      const text = await transcribeAudio(uri, apiKey);
+      const text = await transcribeAudio(uri);
       setTranscribedText(text || '(silence)');
 
       if (transcriptContainsWord(text, currentWord)) {
@@ -116,11 +103,6 @@ export function GameScreen() {
   stopRef.current = handleStop;
 
   const handleStart = async () => {
-    if (!apiKey) {
-      showFeedback('error', 'Add your OpenAI API key to start playing.');
-      setSettingsOpen(true);
-      return;
-    }
     resetRound();
     try {
       await startRecording();
@@ -134,23 +116,11 @@ export function GameScreen() {
     autoStopTimer.current = setTimeout(() => stopRef.current(), MAX_RECORDING_MS);
   };
 
-  const handleSaveKey = async (key: string) => {
-    await saveApiKey(key);
-    setApiKey(key);
-    setSettingsOpen(false);
-    if (feedbackKind === 'error') resetRound();
-  };
-
-  const handleClearKey = async () => {
-    await clearApiKey();
-    setApiKey(await loadApiKey());
-  };
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={[styles.column, { gap: 22 * scale, paddingHorizontal: 16 * scale }]}>
-          <Header score={score} onOpenSettings={() => setSettingsOpen(true)} />
+          <Header score={score} />
 
           {permission === 'denied' && (
             <Text style={[styles.warning, { fontSize: 15 * scale }]} onPress={requestPermission}>
@@ -178,13 +148,6 @@ export function GameScreen() {
         </View>
       </ScrollView>
 
-      <ApiKeyModal
-        visible={settingsOpen}
-        currentKey={apiKey}
-        onSave={handleSaveKey}
-        onClear={handleClearKey}
-        onClose={() => setSettingsOpen(false)}
-      />
     </SafeAreaView>
   );
 }

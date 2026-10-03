@@ -1,9 +1,6 @@
 import { Platform } from 'react-native';
 
-// Official OpenAI Audio Transcriptions endpoint (Whisper).
-// https://platform.openai.com/docs/api-reference/audio/createTranscription
-const TRANSCRIPTIONS_URL = 'https://api.openai.com/v1/audio/transcriptions';
-const MODEL = 'whisper-1';
+import { TRANSCRIBE_URL } from '../config';
 
 export class TranscriptionError extends Error {
   constructor(
@@ -53,22 +50,17 @@ async function appendAudioFile(form: FormData, uri: string): Promise<void> {
 }
 
 /**
- * Sends a local recording to OpenAI Whisper and returns the transcribed text.
+ * Sends a local recording to the Sing First Worker (Whisper on Cloudflare
+ * Workers AI) as multipart/form-data and returns the transcribed text.
  */
-export async function transcribeAudio(uri: string, apiKey: string): Promise<string> {
+export async function transcribeAudio(uri: string): Promise<string> {
   const form = new FormData();
   await appendAudioFile(form, uri);
-  form.append('model', MODEL);
-  form.append('response_format', 'json');
 
   let response: Response;
   try {
     // Don't set Content-Type — fetch adds the multipart boundary itself.
-    response = await fetch(TRANSCRIPTIONS_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-    });
+    response = await fetch(TRANSCRIBE_URL, { method: 'POST', body: form });
   } catch {
     throw new TranscriptionError('Network error — check your connection and try again.');
   }
@@ -77,12 +69,10 @@ export async function transcribeAudio(uri: string, apiKey: string): Promise<stri
     let message = `Transcription failed (${response.status}).`;
     try {
       const body = await response.json();
-      if (body?.error?.message) message = body.error.message;
+      if (body?.error) message = body.error;
     } catch {
       // Non-JSON error body; keep the generic message.
     }
-    if (response.status === 401) message = 'Your OpenAI API key was rejected. Check it in Settings.';
-    if (response.status === 429) message = 'OpenAI rate limit or quota reached. Check your OpenAI billing.';
     throw new TranscriptionError(message, response.status);
   }
 
