@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme';
+import { SongCard, type SongLookup } from './SongCard';
 import type { Player } from '../types';
 
 export type Phase = 'idle' | 'singing' | 'processing' | 'result';
@@ -13,6 +14,7 @@ type Props = {
   transcript: string;
   resultKind: ResultKind | null;
   message: string;
+  songLookup: SongLookup;
   canSkip: boolean;
   scale: number;
   onDone: () => void;
@@ -32,6 +34,7 @@ export function TurnPanel({
   transcript,
   resultKind,
   message,
+  songLookup,
   canSkip,
   scale,
   onDone,
@@ -42,7 +45,10 @@ export function TurnPanel({
   return (
     <View style={[styles.panel, { minHeight: 120 * scale, padding: 14 * scale, borderRadius: 20 * scale }]}>
       {phase === 'idle' && (
-        <Text style={[styles.headline, { fontSize: 22 * scale }]}>First to tap their button sings! 🎤</Text>
+        <>
+          <Text style={[styles.headline, { fontSize: 22 * scale }]}>First to tap their button sings! 🎤</Text>
+          <SongCard lookup={songLookup} label="LAST SONG" scale={scale} />
+        </>
       )}
 
       {phase === 'singing' && singer && (
@@ -77,6 +83,7 @@ export function TurnPanel({
               Heard: “{transcript}”
             </Text>
           )}
+          <SongCard lookup={songLookup} label="THAT WAS" scale={scale} />
         </>
       )}
 

@@ -3,11 +3,14 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Header } from '../components/Header';
+import { MicHelpModal } from '../components/MicHelpModal';
 import { PlayerBuzzer, type BuzzerState } from '../components/PlayerBuzzer';
+import type { SongLookup } from '../components/SongCard';
 import { TurnPanel, type Phase, type ResultKind } from '../components/TurnPanel';
 import { WordCard } from '../components/WordCard';
 import { pickRandomWord } from '../data/words';
 import { useRecorder } from '../hooks/useRecorder';
+import { identifySong } from '../services/identifySong';
 import { transcribeAudio } from '../services/transcribe';
 import { colors, useScale } from '../theme';
 import type { Player } from '../types';
@@ -37,6 +40,8 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
   const [resultKind, setResultKind] = useState<ResultKind | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [waitingForNextWord, setWaitingForNextWord] = useState(false);
+  const [songLookup, setSongLookup] = useState<SongLookup>({ status: 'idle' });
+  const [micHelpOpen, setMicHelpOpen] = useState(permission === 'denied');
 
   // Refs guard against races: two players buzzing in the same frame, or a tap
   // on "Done" landing at the same moment as the 30s auto-stop.
@@ -46,6 +51,8 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
   const startedAtRef = useRef(0);
   const autoStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextWordTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped every turn so a slow song lookup can't overwrite a newer one.
+  const songRoundRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -116,6 +123,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
     }
 
     setTranscribedText(text);
+    lookUpSong(text);
     const hit = transcriptContainsWord(text, currentWord);
     onChangePlayers((ps) => ps.map((p) => (p.id === playerId ? { ...p, score: p.score + (hit ? 1 : -1) } : p)));
 
@@ -136,6 +144,22 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
     }
   };
 
+  const lookUpSong = (lyrics: string) => {
+    const round = ++songRoundRef.current;
+    if (!lyrics) {
+      setSongLookup({ status: 'idle' });
+      return;
+    }
+    setSongLookup({ status: 'loading' });
+    identifySong(lyrics).then((song) => {
+      if (songRoundRef.current === round) setSongLookup({ status: 'done', song });
+    });
+  };
+
+  const retryMicPermission = async () => {
+    if (await requestPermission()) setMicHelpOpen(false);
+  };
+
   // Keep the auto-stop timer pointed at the latest finishTurn.
   const finishRef = useRef(finishTurn);
   finishRef.current = finishTurn;
@@ -149,6 +173,8 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
     setTranscribedText('');
     setResultKind(null);
     setFeedbackMessage('');
+    songRoundRef.current++;
+    setSongLookup({ status: 'idle' });
 
     try {
       await startRecording();
@@ -156,6 +182,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
       lockedRef.current = false;
       setSingerId(null);
       showResult('error', e instanceof Error ? e.message : 'Could not start the microphone.');
+      if (permission !== 'granted') setMicHelpOpen(true);
       return;
     }
 
@@ -182,8 +209,8 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
           <Header scale={scale} playersDisabled={busy} onEditPlayers={onEditPlayers} />
 
           {permission === 'denied' && (
-            <Text style={[styles.warning, { fontSize: 15 * scale }]} onPress={requestPermission}>
-              🎙️ Microphone access is blocked. Allow it in your settings, then tap here.
+            <Text style={[styles.warning, { fontSize: 15 * scale }]} onPress={() => setMicHelpOpen(true)}>
+              🎙️ The microphone is off. Tap here to see how to turn it on.
             </Text>
           )}
 
@@ -196,6 +223,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
             transcript={transcribedText}
             resultKind={resultKind}
             message={feedbackMessage}
+            songLookup={songLookup}
             canSkip={!waitingForNextWord}
             scale={scale}
             onDone={() => finishRef.current()}
@@ -228,6 +256,13 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
           ))}
         </View>
       </View>
+
+      <MicHelpModal
+        visible={micHelpOpen}
+        scale={scale}
+        onTryAgain={retryMicPermission}
+        onClose={() => setMicHelpOpen(false)}
+      />
     </SafeAreaView>
   );
 }

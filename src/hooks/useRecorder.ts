@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -16,27 +17,38 @@ const RECORDING_OPTIONS: RecordingOptions = {
   numberOfChannels: 1,
 };
 
+// Shared across screens so a permission granted on "Start game" is remembered.
+let lastPermission: MicPermission = 'unknown';
+
+/**
+ * Asks for the microphone. On the web this must run inside a tap handler —
+ * iOS browsers silently refuse requests that aren't triggered by the user.
+ */
+export async function requestMicPermission(): Promise<boolean> {
+  try {
+    const { granted } = await requestRecordingPermissionsAsync();
+    lastPermission = granted ? 'granted' : 'denied';
+    if (granted) await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+    return granted;
+  } catch {
+    lastPermission = 'denied';
+    return false;
+  }
+}
+
 export function useRecorder() {
   const recorder = useAudioRecorder(RECORDING_OPTIONS);
-  const [permission, setPermission] = useState<MicPermission>('unknown');
+  const [permission, setPermission] = useState<MicPermission>(lastPermission);
 
   const requestPermission = useCallback(async () => {
-    try {
-      const { granted } = await requestRecordingPermissionsAsync();
-      setPermission(granted ? 'granted' : 'denied');
-      if (granted) {
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      }
-      return granted;
-    } catch {
-      setPermission('denied');
-      return false;
-    }
+    const granted = await requestMicPermission();
+    setPermission(lastPermission);
+    return granted;
   }, []);
 
-  // Ask for the microphone as soon as the app loads.
+  // Native apps can ask straight away; on the web we wait for a tap.
   useEffect(() => {
-    requestPermission();
+    if (Platform.OS !== 'web' && lastPermission !== 'granted') requestPermission();
   }, [requestPermission]);
 
   const startRecording = useCallback(async () => {
