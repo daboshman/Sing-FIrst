@@ -13,7 +13,7 @@ import { transcribeAudio } from '../services/transcribe';
 import { colors, useScale } from '../theme';
 import { transcriptContainsWord } from '../utils/matchWord';
 
-const MAX_RECORDING_MS = 10_000; // auto-stop so clips stay short (and cheap)
+const MAX_RECORDING_MS = 30_000; // auto-stop so clips stay within the free daily allowance
 const MIN_RECORDING_MS = 700;
 const NEXT_WORD_DELAY_MS = 1800;
 
@@ -29,6 +29,7 @@ export function GameScreen() {
   const [transcribedText, setTranscribedText] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>('none');
+  const [elapsedMs, setElapsedMs] = useState(0);
 
   const recordingRef = useRef(false);
   const startedAtRef = useRef(0);
@@ -41,6 +42,14 @@ export function GameScreen() {
       if (nextWordTimer.current) clearTimeout(nextWordTimer.current);
     };
   }, []);
+
+  // Tick the on-screen timer while recording.
+  useEffect(() => {
+    if (!isRecording) return;
+    setElapsedMs(0);
+    const id = setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 250);
+    return () => clearInterval(id);
+  }, [isRecording]);
 
   const showFeedback = (kind: FeedbackKind, message: string) => {
     setFeedbackKind(kind);
@@ -133,6 +142,8 @@ export function GameScreen() {
           <RecordButton
             isRecording={isRecording}
             isProcessing={isProcessing}
+            elapsedMs={elapsedMs}
+            maxMs={MAX_RECORDING_MS}
             disabled={feedbackKind === 'success'}
             onPress={isRecording ? handleStop : handleStart}
           />

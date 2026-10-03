@@ -5,13 +5,20 @@ import { colors, useScale } from '../theme';
 type Props = {
   isRecording: boolean;
   isProcessing: boolean;
+  elapsedMs: number;
+  maxMs: number;
   disabled?: boolean;
   onPress: () => void;
 };
 
 const useNativeDriver = Platform.OS !== 'web';
 
-export function RecordButton({ isRecording, isProcessing, disabled, onPress }: Props) {
+function formatSeconds(ms: number): string {
+  const total = Math.min(Math.floor(ms / 1000), 59 * 60);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+export function RecordButton({ isRecording, isProcessing, elapsedMs, maxMs, disabled, onPress }: Props) {
   const { scale } = useScale();
   const pulse = useRef(new Animated.Value(0)).current;
   const size = 150 * scale;
@@ -38,6 +45,7 @@ export function RecordButton({ isRecording, isProcessing, disabled, onPress }: P
   const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] });
 
   const label = isProcessing ? 'Listening…' : isRecording ? 'Tap to stop' : 'Tap to sing';
+  const remainingMs = Math.max(0, maxMs - elapsedMs);
 
   return (
     <View style={styles.wrapper}>
@@ -90,6 +98,14 @@ export function RecordButton({ isRecording, isProcessing, disabled, onPress }: P
         </Pressable>
       </View>
       <Text style={[styles.label, { fontSize: 18 * scale }]}>{label}</Text>
+      <Text
+        style={[styles.timer, { fontSize: 15 * scale }, remainingMs <= 5000 && isRecording && styles.timerLow]}
+        accessibilityLiveRegion="polite"
+      >
+        {isRecording
+          ? `${formatSeconds(elapsedMs)} / ${formatSeconds(maxMs)}`
+          : `Up to ${Math.round(maxMs / 1000)} seconds`}
+      </Text>
     </View>
   );
 }
@@ -122,5 +138,14 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '800',
     marginTop: -8,
+  },
+  timer: {
+    color: colors.textMuted,
+    fontWeight: '700',
+    marginTop: 4,
+    fontVariant: ['tabular-nums'],
+  },
+  timerLow: {
+    color: colors.card,
   },
 });
