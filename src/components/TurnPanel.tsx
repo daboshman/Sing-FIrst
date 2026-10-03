@@ -45,10 +45,7 @@ export function TurnPanel({
   return (
     <View style={[styles.panel, { minHeight: 120 * scale, padding: 14 * scale, borderRadius: 20 * scale }]}>
       {phase === 'idle' && (
-        <>
-          <Text style={[styles.headline, { fontSize: 22 * scale }]}>First to tap their button sings! 🎤</Text>
-          <SongCard lookup={songLookup} label="LAST SONG" scale={scale} />
-        </>
+        <Text style={[styles.headline, { fontSize: 22 * scale }]}>First to tap their button sings! 🎤</Text>
       )}
 
       {phase === 'singing' && singer && (
@@ -83,8 +80,12 @@ export function TurnPanel({
               Heard: “{transcript}”
             </Text>
           )}
-          <SongCard lookup={songLookup} label="THAT WAS" scale={scale} />
         </>
+      )}
+
+      {/* One instance across result → idle, so it keeps its state when the next word appears. */}
+      {(phase === 'idle' || phase === 'result') && (
+        <SongCard lookup={songLookup} label={phase === 'idle' ? 'LAST SONG' : 'THAT WAS'} scale={scale} />
       )}
 
       {canSkip && (phase === 'idle' || phase === 'result') && (

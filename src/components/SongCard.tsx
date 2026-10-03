@@ -1,7 +1,15 @@
-import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { spotifySearchUrl, youtubeSearchUrl, type Song } from '../services/identifySong';
+import {
+  spotifyAppUrl,
+  spotifySearchUrl,
+  youtubeAppUrl,
+  youtubeSearchUrl,
+  type Song,
+} from '../services/identifySong';
 import { colors } from '../theme';
+import { openMusicLink, openWebsite } from '../utils/openMusicLink';
 
 export type SongLookup = { status: 'idle' } | { status: 'loading' } | { status: 'done'; song: Song | null };
 
@@ -11,13 +19,20 @@ type Props = {
   scale: number;
 };
 
-function openLink(url: string) {
-  // On the web open a new tab so the game keeps running.
-  if (Platform.OS === 'web') window.open(url, '_blank', 'noopener,noreferrer');
-  else Linking.openURL(url);
-}
+type Service = { name: string; webUrl: string };
 
 export function SongCard({ lookup, label, scale }: Props) {
+  // Set when the app isn't installed, to offer the website instead.
+  const [missingApp, setMissingApp] = useState<Service | null>(null);
+  const song = lookup.status === 'done' ? lookup.song : null;
+
+  useEffect(() => setMissingApp(null), [song]);
+
+  const open = async (name: string, appUrl: string, webUrl: string) => {
+    setMissingApp(null);
+    if ((await openMusicLink(appUrl, webUrl)) === 'app-missing') setMissingApp({ name, webUrl });
+  };
+
   if (lookup.status === 'idle') return null;
 
   if (lookup.status === 'loading') {
@@ -29,11 +44,10 @@ export function SongCard({ lookup, label, scale }: Props) {
     );
   }
 
-  if (!lookup.song) {
+  if (!song) {
     return <Text style={[styles.muted, { fontSize: 14 * scale }]}>🎵 Couldn't recognize the song</Text>;
   }
 
-  const { song } = lookup;
   return (
     <View style={[styles.card, { padding: 12 * scale, borderRadius: 16 * scale, gap: 8 * scale }]}>
       <Text style={[styles.label, { fontSize: 12 * scale }]}>{label}</Text>
@@ -41,9 +55,27 @@ export function SongCard({ lookup, label, scale }: Props) {
         🎵 {song.title} <Text style={styles.artist}>— {song.artist}</Text>
       </Text>
       <View style={[styles.row, { gap: 10 * scale }]}>
-        <LinkButton label="▶ YouTube" color="#FF0033" scale={scale} onPress={() => openLink(youtubeSearchUrl(song))} />
-        <LinkButton label="● Spotify" color="#1DB954" scale={scale} onPress={() => openLink(spotifySearchUrl(song))} />
+        <LinkButton
+          label="▶ YouTube"
+          color="#FF0033"
+          scale={scale}
+          onPress={() => open('YouTube', youtubeAppUrl(song), youtubeSearchUrl(song))}
+        />
+        <LinkButton
+          label="● Spotify"
+          color="#1DB954"
+          scale={scale}
+          onPress={() => open('Spotify', spotifyAppUrl(song), spotifySearchUrl(song))}
+        />
       </View>
+      {missingApp && (
+        <Text style={[styles.muted, { fontSize: 14 * scale }]}>
+          No {missingApp.name} app found.{' '}
+          <Text style={styles.webLink} onPress={() => openWebsite(missingApp.webUrl)} accessibilityRole="link">
+            Open the {missingApp.name} website
+          </Text>
+        </Text>
+      )}
     </View>
   );
 }
@@ -104,6 +136,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  webLink: {
+    color: colors.text,
+    textDecorationLine: 'underline',
   },
   link: {
     borderRadius: 999,

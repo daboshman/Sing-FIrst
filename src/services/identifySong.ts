@@ -29,3 +29,12 @@ export function youtubeSearchUrl({ title, artist }: Song): string {
 export function spotifySearchUrl({ title, artist }: Song): string {
   return `https://open.spotify.com/search/${encodeURIComponent(`${title} ${artist}`)}`;
 }
+
+// App URL schemes, used on iOS browsers to open the installed app directly.
+export function youtubeAppUrl({ title, artist }: Song): string {
+  return `youtube://www.youtube.com/results?search_query=${encodeURIComponent(`${title} ${artist}`)}`;
+}
+
+export function spotifyAppUrl({ title, artist }: Song): string {
+  return `spotify:search:${encodeURIComponent(`${title} ${artist}`)}`;
+}
