@@ -1,24 +1,32 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { colors, useScale } from '../theme';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors } from '../theme';
 
 type Props = {
-  score: number;
+  scale: number;
+  playersDisabled: boolean;
+  onEditPlayers: () => void;
 };
 
-export function Header({ score }: Props) {
-  const { scale } = useScale();
-
+export function Header({ scale, playersDisabled, onEditPlayers }: Props) {
   return (
     <View style={styles.row}>
-      <Text style={[styles.title, { fontSize: 30 * scale }]} accessibilityRole="header">
+      <Text style={[styles.title, { fontSize: 26 * scale }]} accessibilityRole="header">
         🎤 Sing First
       </Text>
-      <View style={[styles.scorePill, { paddingHorizontal: 16 * scale, paddingVertical: 8 * scale }]}>
-        <Text style={[styles.scoreLabel, { fontSize: 12 * scale }]}>SCORE</Text>
-        <Text style={[styles.scoreValue, { fontSize: 24 * scale }]} accessibilityLabel={`Score ${score}`}>
-          {score}
-        </Text>
-      </View>
+      <Pressable
+        onPress={onEditPlayers}
+        disabled={playersDisabled}
+        accessibilityRole="button"
+        hitSlop={8}
+        style={({ pressed }) => [
+          styles.button,
+          { paddingHorizontal: 14 * scale, paddingVertical: 8 * scale },
+          playersDisabled && styles.disabled,
+          pressed && styles.pressed,
+        ]}
+      >
+        <Text style={[styles.buttonText, { fontSize: 15 * scale }]}>👥 Players</Text>
+      </Pressable>
     </View>
   );
 }
@@ -35,20 +43,20 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
   },
-  scorePill: {
+  button: {
     backgroundColor: colors.surface,
     borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 999,
-    alignItems: 'center',
   },
-  scoreLabel: {
-    color: colors.textMuted,
-    fontWeight: '700',
-    letterSpacing: 1.5,
+  buttonText: {
+    color: colors.text,
+    fontWeight: '800',
   },
-  scoreValue: {
-    color: colors.card,
-    fontWeight: '900',
+  disabled: {
+    opacity: 0.4,
+  },
+  pressed: {
+    opacity: 0.6,
   },
 });

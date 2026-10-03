@@ -1,37 +1,48 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { FeedbackPanel, type FeedbackKind } from '../components/FeedbackPanel';
 import { Header } from '../components/Header';
-import { RecordButton } from '../components/RecordButton';
-import { TranscriptBox } from '../components/TranscriptBox';
+import { PlayerBuzzer, type BuzzerState } from '../components/PlayerBuzzer';
+import { TurnPanel, type Phase, type ResultKind } from '../components/TurnPanel';
 import { WordCard } from '../components/WordCard';
 import { pickRandomWord } from '../data/words';
 import { useRecorder } from '../hooks/useRecorder';
 import { transcribeAudio } from '../services/transcribe';
 import { colors, useScale } from '../theme';
+import type { Player } from '../types';
 import { transcriptContainsWord } from '../utils/matchWord';
 
-const MAX_RECORDING_MS = 30_000; // auto-stop so clips stay within the free daily allowance
+const MAX_SINGING_MS = 30_000;
 const MIN_RECORDING_MS = 700;
-const NEXT_WORD_DELAY_MS = 1800;
+const NEXT_WORD_DELAY_MS = 2500;
 
-export function GameScreen() {
-  const { scale } = useScale();
+type Props = {
+  players: Player[];
+  onChangePlayers: (update: (players: Player[]) => Player[]) => void;
+  onEditPlayers: () => void;
+};
+
+export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
+  const { scale: baseScale, width, height } = useScale();
+  // Vertical space is precious here — the buzzers must fit without scrolling.
+  const scale = Math.max(0.85, Math.min(baseScale, height / 600));
   const { permission, requestPermission, startRecording, stopRecording } = useRecorder();
 
-  // Core game state
-  const [score, setScore] = useState(0);
   const [currentWord, setCurrentWord] = useState(() => pickRandomWord());
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [transcribedText, setTranscribedText] = useState('');
-  const [feedbackMessage, setFeedbackMessage] = useState('');
-  const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>('none');
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [singerId, setSingerId] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [transcribedText, setTranscribedText] = useState('');
+  const [resultKind, setResultKind] = useState<ResultKind | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [waitingForNextWord, setWaitingForNextWord] = useState(false);
 
+  // Refs guard against races: two players buzzing in the same frame, or a tap
+  // on "Done" landing at the same moment as the 30s auto-stop.
+  const lockedRef = useRef(false);
   const recordingRef = useRef(false);
+  const singerRef = useRef<string | null>(null);
   const startedAtRef = useRef(0);
   const autoStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextWordTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,93 +54,132 @@ export function GameScreen() {
     };
   }, []);
 
-  // Tick the on-screen timer while recording.
+  // Tick the countdown while someone is singing.
   useEffect(() => {
-    if (!isRecording) return;
+    if (phase !== 'singing') return;
     setElapsedMs(0);
-    const id = setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 250);
+    const id = setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 200);
     return () => clearInterval(id);
-  }, [isRecording]);
+  }, [phase]);
 
-  const showFeedback = (kind: FeedbackKind, message: string) => {
-    setFeedbackKind(kind);
+  const showResult = (kind: ResultKind, message: string) => {
+    setResultKind(kind);
     setFeedbackMessage(message);
+    setPhase('result');
   };
-
-  const resetRound = useCallback(() => {
-    setTranscribedText('');
-    setFeedbackKind('none');
-    setFeedbackMessage('');
-  }, []);
 
   const nextWord = useCallback(() => {
     if (nextWordTimer.current) clearTimeout(nextWordTimer.current);
     nextWordTimer.current = null;
     setCurrentWord((prev) => pickRandomWord(prev));
-    resetRound();
-  }, [resetRound]);
+    setTranscribedText('');
+    setResultKind(null);
+    setFeedbackMessage('');
+    setSingerId(null);
+    setPhase('idle');
+    setWaitingForNextWord(false);
+    lockedRef.current = false;
+  }, []);
 
-  const handleStop = async () => {
-    if (!recordingRef.current) return; // already stopped (tap + auto-stop race)
+  const finishTurn = async () => {
+    if (!recordingRef.current) return;
     recordingRef.current = false;
     if (autoStopTimer.current) clearTimeout(autoStopTimer.current);
-    setIsRecording(false);
+
+    const playerId = singerRef.current;
+    const player = players.find((p) => p.id === playerId);
+    const duration = Date.now() - startedAtRef.current;
+    setPhase('processing');
 
     let uri: string | null = null;
     try {
       uri = await stopRecording();
     } catch {
-      showFeedback('error', 'Recording failed. Try again!');
+      // Ignore — handled as a missing recording below.
+    }
+    if (!uri || !playerId) {
+      lockedRef.current = false;
+      showResult('error', 'The recording failed — no points lost. Buzz again!');
       return;
     }
 
-    if (!uri || Date.now() - startedAtRef.current < MIN_RECORDING_MS) {
-      showFeedback('failure', 'That was too short — sing a bit more!');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const text = await transcribeAudio(uri);
-      setTranscribedText(text || '(silence)');
-
-      if (transcriptContainsWord(text, currentWord)) {
-        setScore((s) => s + 1);
-        showFeedback('success', 'Correct! +1 Point 🎉');
-        nextWordTimer.current = setTimeout(nextWord, NEXT_WORD_DELAY_MS);
-      } else {
-        showFeedback('failure', "Oops, I didn't hear the word!");
+    let text = '';
+    if (duration >= MIN_RECORDING_MS) {
+      try {
+        text = await transcribeAudio(uri);
+      } catch (e) {
+        lockedRef.current = false;
+        const reason = e instanceof Error ? e.message : 'Something went wrong.';
+        showResult('error', `${reason} No points lost.`);
+        return;
       }
-    } catch (e) {
-      showFeedback('error', e instanceof Error ? e.message : 'Something went wrong.');
-    } finally {
-      setIsProcessing(false);
+    }
+
+    setTranscribedText(text);
+    const hit = transcriptContainsWord(text, currentWord);
+    onChangePlayers((ps) => ps.map((p) => (p.id === playerId ? { ...p, score: p.score + (hit ? 1 : -1) } : p)));
+
+    const name = player?.name ?? 'Player';
+    if (hit) {
+      showResult('success', `🎉 ${name} got it! +1`);
+      setWaitingForNextWord(true);
+      // Stay locked until the new word appears.
+      nextWordTimer.current = setTimeout(nextWord, NEXT_WORD_DELAY_MS);
+    } else {
+      showResult(
+        'failure',
+        text
+          ? `😬 No “${currentWord}” there — ${name} loses a point. Anyone else?`
+          : `😬 I didn't hear any singing — ${name} loses a point.`,
+      );
+      lockedRef.current = false; // same word, everyone can buzz again
     }
   };
 
-  // Keep the auto-stop timer pointed at the latest handleStop.
-  const stopRef = useRef(handleStop);
-  stopRef.current = handleStop;
+  // Keep the auto-stop timer pointed at the latest finishTurn.
+  const finishRef = useRef(finishTurn);
+  finishRef.current = finishTurn;
 
-  const handleStart = async () => {
-    resetRound();
+  const buzz = async (playerId: string) => {
+    if (lockedRef.current) return;
+    lockedRef.current = true;
+
+    singerRef.current = playerId;
+    setSingerId(playerId);
+    setTranscribedText('');
+    setResultKind(null);
+    setFeedbackMessage('');
+
     try {
       await startRecording();
     } catch (e) {
-      showFeedback('error', e instanceof Error ? e.message : 'Could not start the microphone.');
+      lockedRef.current = false;
+      setSingerId(null);
+      showResult('error', e instanceof Error ? e.message : 'Could not start the microphone.');
       return;
     }
+
     recordingRef.current = true;
     startedAtRef.current = Date.now();
-    setIsRecording(true);
-    autoStopTimer.current = setTimeout(() => stopRef.current(), MAX_RECORDING_MS);
+    setPhase('singing');
+    autoStopTimer.current = setTimeout(() => finishRef.current(), MAX_SINGING_MS);
   };
+
+  const buzzerState = (id: string): BuzzerState => {
+    if (phase === 'singing') return id === singerId ? 'singing' : 'locked';
+    if (phase === 'processing' || waitingForNextWord) return 'locked';
+    return 'ready';
+  };
+
+  const singer = players.find((p) => p.id === singerId);
+  const busy = phase === 'singing' || phase === 'processing';
+  const grid = layoutGrid(players.length, width > height);
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={[styles.column, { gap: 22 * scale, paddingHorizontal: 16 * scale }]}>
-          <Header score={score} />
+      <View style={[styles.container, { padding: 14 * scale, gap: 12 * scale }]}>
+        <View style={[styles.top, { gap: 12 * scale }]}>
+          <Header scale={scale} playersDisabled={busy} onEditPlayers={onEditPlayers} />
 
           {permission === 'denied' && (
             <Text style={[styles.warning, { fontSize: 15 * scale }]} onPress={requestPermission}>
@@ -137,30 +187,63 @@ export function GameScreen() {
             </Text>
           )}
 
-          <WordCard word={currentWord} />
+          <WordCard word={currentWord} scale={scale} />
 
-          <RecordButton
-            isRecording={isRecording}
-            isProcessing={isProcessing}
-            elapsedMs={elapsedMs}
-            maxMs={MAX_RECORDING_MS}
-            disabled={feedbackKind === 'success'}
-            onPress={isRecording ? handleStop : handleStart}
-          />
-
-          <TranscriptBox text={transcribedText} />
-
-          <FeedbackPanel
-            kind={feedbackKind}
+          <TurnPanel
+            phase={phase}
+            singer={singer}
+            remainingMs={Math.max(0, MAX_SINGING_MS - elapsedMs)}
+            transcript={transcribedText}
+            resultKind={resultKind}
             message={feedbackMessage}
-            onTryAgain={resetRound}
+            canSkip={!waitingForNextWord}
+            scale={scale}
+            onDone={() => finishRef.current()}
             onSkip={nextWord}
           />
         </View>
-      </ScrollView>
 
+        <View style={[styles.grid, { gap: 12 * scale }]}>
+          {grid.map((row, r) => (
+            <View key={r} style={[styles.gridRow, { gap: 12 * scale }]}>
+              {row.map((index) => {
+                const player = players[index];
+                return (
+                  <PlayerBuzzer
+                    key={player.id}
+                    player={player}
+                    state={buzzerState(player.id)}
+                    progress={player.id === singerId ? elapsedMs / MAX_SINGING_MS : 0}
+                    scale={scale}
+                    onBuzz={() => buzz(player.id)}
+                    onDone={() => finishRef.current()}
+                  />
+                );
+              })}
+              {/* Keep tiles in a short last row the same size as the rest. */}
+              {Array.from({ length: grid[0].length - row.length }, (_, i) => (
+                <View key={`spacer-${i}`} style={styles.spacer} />
+              ))}
+            </View>
+          ))}
+        </View>
+      </View>
     </SafeAreaView>
   );
+}
+
+/** Splits player indexes into rows that fill the screen nicely. */
+function layoutGrid(count: number, landscape: boolean): number[][] {
+  if (count === 0) return [[]];
+  let columns: number;
+  if (landscape) columns = count <= 4 ? count : Math.ceil(count / 2);
+  else columns = count === 1 ? 1 : 2;
+
+  const rows: number[][] = [];
+  for (let i = 0; i < count; i += columns) {
+    rows.push(Array.from({ length: Math.min(columns, count - i) }, (_, j) => i + j));
+  }
+  return rows;
 }
 
 const styles = StyleSheet.create({
@@ -168,16 +251,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scroll: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-  },
-  column: {
+  container: {
+    flex: 1,
     width: '100%',
-    maxWidth: 680,
+    maxWidth: 1200,
+    alignSelf: 'center',
+  },
+  top: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
     alignItems: 'center',
+  },
+  grid: {
+    flex: 1,
+    minHeight: 120,
+  },
+  gridRow: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  spacer: {
+    flex: 1,
   },
   warning: {
     width: '100%',

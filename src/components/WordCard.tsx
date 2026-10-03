@@ -1,19 +1,17 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, useScale } from '../theme';
+import { colors } from '../theme';
 
 type Props = {
   word: string;
+  scale: number;
 };
 
-export function WordCard({ word }: Props) {
-  const { scale } = useScale();
-
+export function WordCard({ word, scale }: Props) {
   return (
-    <View style={[styles.card, { padding: 24 * scale, borderRadius: 28 * scale }]}>
-      <Text style={[styles.prompt, { fontSize: 16 * scale }]}>Sing a song with the word</Text>
+    <View style={[styles.card, { paddingVertical: 14 * scale, paddingHorizontal: 20 * scale, borderRadius: 24 * scale }]}>
+      <Text style={[styles.prompt, { fontSize: 15 * scale }]}>Sing a song with the word</Text>
       <Text
-        style={[styles.word, { fontSize: 64 * scale }]}
-        adjustsFontSizeToFit
+        style={[styles.word, { fontSize: 52 * scale }]}
         numberOfLines={1}
         accessibilityLabel={`Target word: ${word}`}
       >
