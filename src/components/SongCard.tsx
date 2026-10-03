@@ -9,9 +9,15 @@ import {
   type Song,
 } from '../services/identifySong';
 import { colors } from '../theme';
+import { isolate } from '../utils/bidi';
 import { openMusicLink, openWebsite } from '../utils/openMusicLink';
 
-export type SongLookup = { status: 'idle' } | { status: 'loading' } | { status: 'done'; song: Song | null };
+export type SongLookup =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'done'; song: Song | null }
+  // No reliable identification (Hebrew): search the sung lyrics instead.
+  | { status: 'search'; query: string };
 
 type Props = {
   lookup: SongLookup;
@@ -25,8 +31,9 @@ export function SongCard({ lookup, label, scale }: Props) {
   // Set when the app isn't installed, to offer the website instead.
   const [missingApp, setMissingApp] = useState<Service | null>(null);
   const song = lookup.status === 'done' ? lookup.song : null;
+  const query = lookup.status === 'search' ? lookup.query : null;
 
-  useEffect(() => setMissingApp(null), [song]);
+  useEffect(() => setMissingApp(null), [song, query]);
 
   const open = async (name: string, appUrl: string, webUrl: string) => {
     setMissingApp(null);
@@ -44,28 +51,38 @@ export function SongCard({ lookup, label, scale }: Props) {
     );
   }
 
-  if (!song) {
+  if (!song && !query) {
     return <Text style={[styles.muted, { fontSize: 14 * scale }]}>🎵 Couldn't recognize the song</Text>;
   }
 
+  // Search terms: "title artist" for an identified song, else the first
+  // words of the lyrics (enough to find it, short enough for a search box).
+  const terms = song ? `${song.title} ${song.artist}` : query!.split(/\s+/).slice(0, 10).join(' ');
+
   return (
     <View style={[styles.card, { padding: 12 * scale, borderRadius: 16 * scale, gap: 8 * scale }]}>
-      <Text style={[styles.label, { fontSize: 12 * scale }]}>{label}</Text>
-      <Text style={[styles.title, { fontSize: 18 * scale }]} numberOfLines={2}>
-        🎵 {song.title} <Text style={styles.artist}>— {song.artist}</Text>
-      </Text>
+      <Text style={[styles.label, { fontSize: 12 * scale }]}>{song ? label : 'FIND THIS SONG'}</Text>
+      {song ? (
+        <Text style={[styles.title, { fontSize: 18 * scale }]} numberOfLines={2}>
+          🎵 {isolate(song.title)} <Text style={styles.artist}>— {isolate(song.artist)}</Text>
+        </Text>
+      ) : (
+        <Text style={[styles.title, styles.lyrics, { fontSize: 16 * scale }]} numberOfLines={2}>
+          🔎 “{isolate(terms)}”
+        </Text>
+      )}
       <View style={[styles.row, { gap: 10 * scale }]}>
         <LinkButton
           label="▶ YouTube"
           color="#FF0033"
           scale={scale}
-          onPress={() => open('YouTube', youtubeAppUrl(song), youtubeSearchUrl(song))}
+          onPress={() => open('YouTube', youtubeAppUrl(terms), youtubeSearchUrl(terms))}
         />
         <LinkButton
           label="● Spotify"
           color="#1DB954"
           scale={scale}
-          onPress={() => open('Spotify', spotifyAppUrl(song), spotifySearchUrl(song))}
+          onPress={() => open('Spotify', spotifyAppUrl(terms), spotifySearchUrl(terms))}
         />
       </View>
       {missingApp && (
@@ -127,6 +144,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '900',
     textAlign: 'center',
+    writingDirection: 'ltr', // Hebrew parts are wrapped with isolate()
+  },
+  lyrics: {
+    fontWeight: '700',
   },
   artist: {
     color: colors.textMuted,

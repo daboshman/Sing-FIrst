@@ -8,12 +8,13 @@ import { PlayerBuzzer, type BuzzerState } from '../components/PlayerBuzzer';
 import type { SongLookup } from '../components/SongCard';
 import { TurnPanel, type Phase, type ResultKind } from '../components/TurnPanel';
 import { WordCard } from '../components/WordCard';
-import { pickRandomWord } from '../data/words';
+import { pickRandomWord, type WordLanguage, type WordMode } from '../data/words';
 import { useRecorder } from '../hooks/useRecorder';
 import { identifySong } from '../services/identifySong';
 import { transcribeAudio } from '../services/transcribe';
 import { colors, useScale } from '../theme';
 import type { Player } from '../types';
+import { isolate } from '../utils/bidi';
 import { transcriptContainsWord } from '../utils/matchWord';
 
 const MAX_SINGING_MS = 30_000;
@@ -24,15 +25,16 @@ type Props = {
   players: Player[];
   onChangePlayers: (update: (players: Player[]) => Player[]) => void;
   onEditPlayers: () => void;
+  wordMode: WordMode;
 };
 
-export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
+export function GameScreen({ players, onChangePlayers, onEditPlayers, wordMode }: Props) {
   const { scale: baseScale, width, height } = useScale();
   // Vertical space is precious here — the buzzers must fit without scrolling.
   const scale = Math.max(0.85, Math.min(baseScale, height / 600));
   const { permission, requestPermission, startRecording, stopRecording } = useRecorder();
 
-  const [currentWord, setCurrentWord] = useState(() => pickRandomWord());
+  const [currentWord, setCurrentWord] = useState(() => pickRandomWord(wordMode));
   const [phase, setPhase] = useState<Phase>('idle');
   const [singerId, setSingerId] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -78,7 +80,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
   const nextWord = useCallback(() => {
     if (nextWordTimer.current) clearTimeout(nextWordTimer.current);
     nextWordTimer.current = null;
-    setCurrentWord((prev) => pickRandomWord(prev));
+    setCurrentWord((prev) => pickRandomWord(wordMode, prev));
     setTranscribedText('');
     setResultKind(null);
     setFeedbackMessage('');
@@ -86,7 +88,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
     setPhase('idle');
     setWaitingForNextWord(false);
     lockedRef.current = false;
-  }, []);
+  }, [wordMode]);
 
   const finishTurn = async () => {
     if (!recordingRef.current) return;
@@ -113,7 +115,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
     let text = '';
     if (duration >= MIN_RECORDING_MS) {
       try {
-        text = await transcribeAudio(uri);
+        text = await transcribeAudio(uri, currentWord.lang);
       } catch (e) {
         lockedRef.current = false;
         const reason = e instanceof Error ? e.message : 'Something went wrong.';
@@ -123,11 +125,11 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
     }
 
     setTranscribedText(text);
-    lookUpSong(text);
-    const hit = transcriptContainsWord(text, currentWord);
+    lookUpSong(text, currentWord.lang);
+    const hit = transcriptContainsWord(text, currentWord.text);
     onChangePlayers((ps) => ps.map((p) => (p.id === playerId ? { ...p, score: p.score + (hit ? 1 : -1) } : p)));
 
-    const name = player?.name ?? 'Player';
+    const name = isolate(player?.name ?? 'Player');
     if (hit) {
       showResult('success', `🎉 ${name} got it! +1`);
       setWaitingForNextWord(true);
@@ -137,17 +139,23 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
       showResult(
         'failure',
         text
-          ? `😬 No “${currentWord}” there — ${name} loses a point. Anyone else?`
+          ? `😬 No “${isolate(currentWord.text)}” there — ${name} loses a point. Anyone else?`
           : `😬 I didn't hear any singing — ${name} loses a point.`,
       );
       lockedRef.current = false; // same word, everyone can buzz again
     }
   };
 
-  const lookUpSong = (lyrics: string) => {
+  const lookUpSong = (lyrics: string, lang: WordLanguage) => {
     const round = ++songRoundRef.current;
     if (!lyrics) {
       setSongLookup({ status: 'idle' });
+      return;
+    }
+    // The free AI models don't know Hebrew songs reliably (they invent
+    // artists), so for Hebrew we search the sung lyrics themselves instead.
+    if (lang === 'he') {
+      setSongLookup({ status: 'search', query: lyrics });
       return;
     }
     setSongLookup({ status: 'loading' });
@@ -214,7 +222,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers }: Props) {
             </Text>
           )}
 
-          <WordCard word={currentWord} scale={scale} />
+          <WordCard word={currentWord.text} scale={scale} />
 
           <TurnPanel
             phase={phase}

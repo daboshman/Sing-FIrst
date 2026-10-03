@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme';
+import { isolate } from '../utils/bidi';
 import { SongCard, type SongLookup } from './SongCard';
 import type { Player } from '../types';
 
@@ -51,7 +52,7 @@ export function TurnPanel({
       {phase === 'singing' && singer && (
         <>
           <Text style={[styles.headline, { fontSize: 22 * scale }]}>
-            <Text style={{ color: singer.color }}>{singer.name}</Text> is singing…{' '}
+            <Text style={{ color: singer.color }}>{isolate(singer.name)}</Text> is singing…{' '}
             <Text style={[styles.countdown, seconds <= 5 && styles.countdownLow]}>{seconds}s</Text>
           </Text>
           <ActionButton label="⏹ Done singing" color={colors.record} scale={scale} onPress={onDone} />
@@ -62,7 +63,7 @@ export function TurnPanel({
         <View style={styles.row}>
           <ActivityIndicator color={colors.text} />
           <Text style={[styles.headline, { fontSize: 20 * scale }]}>
-            Listening to {singer?.name ?? 'the singer'}…
+            Listening to {isolate(singer?.name ?? 'the singer')}…
           </Text>
         </View>
       )}
@@ -77,7 +78,7 @@ export function TurnPanel({
           </Text>
           {!!transcript && (
             <Text style={[styles.transcript, { fontSize: 16 * scale }]} numberOfLines={3}>
-              Heard: “{transcript}”
+              Heard: “{isolate(transcript)}”
             </Text>
           )}
         </>
@@ -140,6 +141,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '900',
     textAlign: 'center',
+    // English sentences that may contain Hebrew names/words: keep them LTR
+    // (the Hebrew parts are wrapped with isolate()).
+    writingDirection: 'ltr',
   },
   countdown: {
     color: colors.card,
@@ -152,7 +156,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontStyle: 'italic',
     textAlign: 'center',
-    writingDirection: 'auto',
+    writingDirection: 'ltr',
   },
   button: {
     borderRadius: 999,

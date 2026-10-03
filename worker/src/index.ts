@@ -1,7 +1,8 @@
 /**
  * Sing First Worker — runs entirely on Cloudflare's free plan.
  *
- * POST /transcribe  multipart/form-data with a `file` field (the recording).
+ * POST /transcribe  multipart/form-data with a `file` field (the recording)
+ *                   and an optional `language` ("en" default, or "he").
  *                   Runs Whisper on Workers AI and returns `{ text }`.
  * POST /identify    JSON `{ text }` (the sung lyrics). Asks an LLM which song
  *                   it is, double-checks against LRCLIB lyrics, and returns
@@ -15,6 +16,7 @@ const WHISPER_MODEL = '@cf/openai/whisper-large-v3-turbo';
 const SONG_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const MAX_BYTES = 3 * 1024 * 1024; // 30s clips are well under 1 MB
 const MAX_LYRICS_CHARS = 600;
+const LANGUAGES = new Set(['en', 'he']);
 
 // Production site, Firebase preview channels, and local dev servers.
 const ALLOWED_ORIGIN =
@@ -84,11 +86,14 @@ async function transcribe(request: Request, env: Env, cors: Cors): Promise<Respo
   if (declared > MAX_BYTES) return json({ error: 'Recording is too long.' }, 413, cors);
 
   let file: File;
+  let language = 'en';
   try {
     const form = await request.formData();
     const entry = form.get('file');
     if (!entry || typeof entry === 'string') throw new Error('missing file');
     file = entry;
+    const lang = form.get('language');
+    if (typeof lang === 'string' && LANGUAGES.has(lang)) language = lang;
   } catch {
     return json({ error: 'Expected multipart/form-data with a "file" field.' }, 400, cors);
   }
@@ -101,7 +106,7 @@ async function transcribe(request: Request, env: Env, cors: Cors): Promise<Respo
     const result = await env.AI.run(WHISPER_MODEL, {
       audio,
       task: 'transcribe',
-      language: 'en',
+      language,
       condition_on_previous_text: false,
     });
     return json({ text: (result.text ?? '').trim() }, 200, cors);

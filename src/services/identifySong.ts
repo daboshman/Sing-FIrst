@@ -22,19 +22,19 @@ export async function identifySong(lyrics: string): Promise<Song | null> {
   }
 }
 
-export function youtubeSearchUrl({ title, artist }: Song): string {
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${title} ${artist}`)}`;
+export function youtubeSearchUrl(terms: string): string {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(terms)}`;
 }
 
-export function spotifySearchUrl({ title, artist }: Song): string {
-  return `https://open.spotify.com/search/${encodeURIComponent(`${title} ${artist}`)}`;
+export function spotifySearchUrl(terms: string): string {
+  return `https://open.spotify.com/search/${encodeURIComponent(terms)}`;
 }
 
 // App URL schemes, used on iOS browsers to open the installed app directly.
-export function youtubeAppUrl({ title, artist }: Song): string {
-  return `youtube://www.youtube.com/results?search_query=${encodeURIComponent(`${title} ${artist}`)}`;
+export function youtubeAppUrl(terms: string): string {
+  return `youtube://www.youtube.com/results?search_query=${encodeURIComponent(terms)}`;
 }
 
-export function spotifyAppUrl({ title, artist }: Song): string {
-  return `spotify:search:${encodeURIComponent(`${title} ${artist}`)}`;
+export function spotifyAppUrl(terms: string): string {
+  return `spotify:search:${encodeURIComponent(terms)}`;
 }

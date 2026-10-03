@@ -11,16 +11,25 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import type { WordMode } from '../data/words';
 import { colors, useScale } from '../theme';
 import { createPlayer, MAX_PLAYERS, type Player } from '../types';
 
 type Props = {
   players: Player[];
-  onChangePlayers: (players: Player[]) => void;
+  onChangePlayers: (update: (players: Player[]) => Player[]) => void;
+  wordMode: WordMode;
+  onChangeWordMode: (mode: WordMode) => void;
   onStart: () => void;
 };
 
-export function SetupScreen({ players, onChangePlayers, onStart }: Props) {
+const WORD_MODES: { mode: WordMode; label: string }[] = [
+  { mode: 'en', label: 'English' },
+  { mode: 'he', label: 'עברית' },
+  { mode: 'mix', label: 'Both · שניהם' },
+];
+
+export function SetupScreen({ players, onChangePlayers, wordMode, onChangeWordMode, onStart }: Props) {
   const { scale } = useScale();
   const [name, setName] = useState('');
   const inputRef = useRef<TextInput>(null);
@@ -29,15 +38,18 @@ export function SetupScreen({ players, onChangePlayers, onStart }: Props) {
   const full = players.length >= MAX_PLAYERS;
   const hasScores = players.some((p) => p.score !== 0);
 
-  const addPlayer = () => {
-    if (!trimmed || full) return;
-    onChangePlayers([...players, createPlayer(trimmed, players)]);
+  // Takes the text from the submit event when there is one: a fast Enter can
+  // arrive before React has re-rendered with the latest typed name.
+  const addPlayer = (typed: string = name) => {
+    const newName = typed.trim();
+    if (!newName || full) return;
+    onChangePlayers((ps) => (ps.length >= MAX_PLAYERS ? ps : [...ps, createPlayer(newName, ps)]));
     setName('');
     inputRef.current?.focus();
   };
 
-  const removePlayer = (id: string) => onChangePlayers(players.filter((p) => p.id !== id));
-  const resetScores = () => onChangePlayers(players.map((p) => ({ ...p, score: 0 })));
+  const removePlayer = (id: string) => onChangePlayers((ps) => ps.filter((p) => p.id !== id));
+  const resetScores = () => onChangePlayers((ps) => ps.map((p) => ({ ...p, score: 0 })));
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -95,13 +107,16 @@ export function SetupScreen({ players, onChangePlayers, onStart }: Props) {
                   editable={!full}
                   autoCorrect={false}
                   returnKeyType="done"
+                  // Keep the keyboard up so the next name can be typed right away
+                  // (react-native-web still reads blurOnSubmit).
                   submitBehavior="submit"
-                  onSubmitEditing={addPlayer}
+                  blurOnSubmit={false}
+                  onSubmitEditing={(e) => addPlayer(e.nativeEvent.text)}
                   style={[styles.input, { fontSize: 18 * scale, padding: 14 * scale }]}
                   accessibilityLabel="New player name"
                 />
                 <Pressable
-                  onPress={addPlayer}
+                  onPress={() => addPlayer()}
                   disabled={!trimmed || full}
                   accessibilityRole="button"
                   style={({ pressed }) => [
@@ -113,6 +128,35 @@ export function SetupScreen({ players, onChangePlayers, onStart }: Props) {
                 >
                   <Text style={[styles.addText, { fontSize: 17 * scale }]}>＋ Add</Text>
                 </Pressable>
+              </View>
+            </View>
+
+            <View style={[styles.card, { padding: 18 * scale, borderRadius: 22 * scale, gap: 10 * scale }]}>
+              <Text style={[styles.label, { fontSize: 13 * scale }]}>WORDS & SONGS</Text>
+              <View style={[styles.segment, { borderRadius: 14 * scale }]} accessibilityRole="radiogroup">
+                {WORD_MODES.map(({ mode, label }) => {
+                  const selected = mode === wordMode;
+                  return (
+                    <Pressable
+                      key={mode}
+                      onPress={() => onChangeWordMode(mode)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      style={[
+                        styles.segmentItem,
+                        { paddingVertical: 12 * scale, borderRadius: 11 * scale },
+                        selected && styles.segmentSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[styles.segmentText, { fontSize: 16 * scale }, selected && styles.segmentTextSelected]}
+                        numberOfLines={1}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
 
@@ -251,6 +295,27 @@ const styles = StyleSheet.create({
   addText: {
     color: colors.text,
     fontWeight: '800',
+  },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    padding: 3,
+    gap: 3,
+  },
+  segmentItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentSelected: {
+    backgroundColor: colors.card,
+  },
+  segmentText: {
+    color: colors.textMuted,
+    fontWeight: '800',
+  },
+  segmentTextSelected: {
+    color: colors.cardText,
   },
   startButton: {
     backgroundColor: colors.record,

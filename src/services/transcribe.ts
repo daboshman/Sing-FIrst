@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 
 import { TRANSCRIBE_URL } from '../config';
+import type { WordLanguage } from '../data/words';
 
 export class TranscriptionError extends Error {
   constructor(
@@ -52,10 +53,12 @@ async function appendAudioFile(form: FormData, uri: string): Promise<void> {
 /**
  * Sends a local recording to the Sing First Worker (Whisper on Cloudflare
  * Workers AI) as multipart/form-data and returns the transcribed text.
+ * `language` tells Whisper which language to expect (the target word's).
  */
-export async function transcribeAudio(uri: string): Promise<string> {
+export async function transcribeAudio(uri: string, language: WordLanguage): Promise<string> {
   const form = new FormData();
   await appendAudioFile(form, uri);
+  form.append('language', language);
 
   let response: Response;
   try {
