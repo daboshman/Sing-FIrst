@@ -53,12 +53,14 @@ async function appendAudioFile(form: FormData, uri: string): Promise<void> {
 /**
  * Sends a local recording to the Sing First Worker (Whisper on Cloudflare
  * Workers AI) as multipart/form-data and returns the transcribed text.
- * `language` tells Whisper which language to expect (the target word's).
+ * `language` tells Whisper which language to expect (the target word's);
+ * `hint` is the target word, which helps it spell Hebrew singing correctly.
  */
-export async function transcribeAudio(uri: string, language: WordLanguage): Promise<string> {
+export async function transcribeAudio(uri: string, language: WordLanguage, hint?: string): Promise<string> {
   const form = new FormData();
   await appendAudioFile(form, uri);
   form.append('language', language);
+  if (hint) form.append('hint', hint);
 
   let response: Response;
   try {

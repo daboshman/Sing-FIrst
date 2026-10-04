@@ -2,7 +2,8 @@
  * Sing First Worker — runs entirely on Cloudflare's free plan.
  *
  * POST /transcribe  multipart/form-data with a `file` field (the recording)
- *                   and an optional `language` ("en" default, or "he").
+ *                   and an optional `language` ("en" default, or "he") and
+ *                   `hint` (the target word, used to help Hebrew transcription).
  *                   Runs Whisper on Workers AI and returns `{ text }`.
  * POST /identify    JSON `{ text }` (the sung lyrics). Asks an LLM which song
  *                   it is, double-checks against LRCLIB lyrics, and returns
@@ -17,6 +18,16 @@ const SONG_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const MAX_BYTES = 3 * 1024 * 1024; // 30s clips are well under 1 MB
 const MAX_LYRICS_CHARS = 600;
 const LANGUAGES = new Set(['en', 'he']);
+const MAX_HINT_CHARS = 40;
+
+// What Whisper "hears" in silence or noise. Treated as no singing at all —
+// otherwise staying silent on the word תודה would score a point.
+const HALLUCINATIONS = new Set(['תודה רבה', 'תודה', 'תודה רבה לכם', 'thank you', 'thanks for watching', 'you']);
+
+function isHallucination(text: string): boolean {
+  // No letters at all (e.g. "????" for humming) also means no words were sung.
+  return !/\p{L}/u.test(text) || HALLUCINATIONS.has(text.toLowerCase().replace(/[.!?,]/g, '').trim());
+}
 
 // Production site, Firebase preview channels, and local dev servers.
 const ALLOWED_ORIGIN =
@@ -87,6 +98,7 @@ async function transcribe(request: Request, env: Env, cors: Cors): Promise<Respo
 
   let file: File;
   let language = 'en';
+  let hint = '';
   try {
     const form = await request.formData();
     const entry = form.get('file');
@@ -94,6 +106,8 @@ async function transcribe(request: Request, env: Env, cors: Cors): Promise<Respo
     file = entry;
     const lang = form.get('language');
     if (typeof lang === 'string' && LANGUAGES.has(lang)) language = lang;
+    const h = form.get('hint');
+    if (typeof h === 'string') hint = h.trim().slice(0, MAX_HINT_CHARS);
   } catch {
     return json({ error: 'Expected multipart/form-data with a "file" field.' }, 400, cors);
   }
@@ -108,8 +122,12 @@ async function transcribe(request: Request, env: Env, cors: Cors): Promise<Respo
       task: 'transcribe',
       language,
       condition_on_previous_text: false,
+      // Hebrew singing is hard to transcribe; telling Whisper which word to
+      // expect makes it far more likely to spell that word correctly.
+      ...(language === 'he' && hint ? { initial_prompt: `שירה בעברית. ${hint}` } : {}),
     });
-    return json({ text: (result.text ?? '').trim() }, 200, cors);
+    const text = (result.text ?? '').trim();
+    return json({ text: isHallucination(text) ? '' : text }, 200, cors);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error('Transcription failed:', message);

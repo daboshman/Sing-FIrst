@@ -116,7 +116,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers, wordMode }
     let text = '';
     if (duration >= MIN_RECORDING_MS) {
       try {
-        text = await transcribeAudio(uri, currentWord.lang);
+        text = await transcribeAudio(uri, currentWord.lang, currentWord.text);
       } catch (e) {
         lockedRef.current = false;
         const reason = e instanceof TranscriptionError ? t.errors[e.kind] : t.errors.failed;
