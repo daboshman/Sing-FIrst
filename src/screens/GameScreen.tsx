@@ -81,7 +81,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers, wordMode }
   const nextWord = useCallback(() => {
     if (nextWordTimer.current) clearTimeout(nextWordTimer.current);
     nextWordTimer.current = null;
-    setCurrentWord((prev) => pickRandomWord(wordMode, prev));
+    setCurrentWord(pickRandomWord(wordMode));
     setTranscribedText('');
     setResultKind(null);
     setFeedbackMessage('');
