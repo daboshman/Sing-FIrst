@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useI18n } from '../i18n/I18nContext';
 import { colors } from '../theme';
 import type { Player } from '../types';
 
@@ -18,6 +19,7 @@ type Props = {
 const useNativeDriver = Platform.OS !== 'web';
 
 export function PlayerBuzzer({ player, state, progress, scale, onBuzz, onDone }: Props) {
+  const { t } = useI18n();
   const pulse = useRef(new Animated.Value(0)).current;
   // True when the current touch is the one that buzzed in, so releasing it
   // doesn't immediately count as "done".
@@ -42,7 +44,7 @@ export function PlayerBuzzer({ player, state, progress, scale, onBuzz, onDone }:
     return () => loop.stop();
   }, [state, pulse]);
 
-  const hint = state === 'ready' ? 'TAP!' : state === 'singing' ? 'Singing… tap when done' : '';
+  const hint = state === 'ready' ? t.tap : state === 'singing' ? t.singingTapDone : '';
 
   return (
     <Pressable
@@ -57,9 +59,7 @@ export function PlayerBuzzer({ player, state, progress, scale, onBuzz, onDone }:
       onLayout={(e) => setBox(e.nativeEvent.layout)}
       disabled={state === 'locked'}
       accessibilityRole="button"
-      accessibilityLabel={
-        state === 'singing' ? `${player.name}, tap when you're done singing` : `${player.name} buzz in`
-      }
+      accessibilityLabel={state === 'singing' ? t.tapWhenDone(player.name) : t.buzzIn(player.name)}
       accessibilityState={{ disabled: state === 'locked' }}
       style={({ pressed }) => [
         styles.tile,
@@ -82,7 +82,7 @@ export function PlayerBuzzer({ player, state, progress, scale, onBuzz, onDone }:
       <Text style={[styles.name, { fontSize: 24 * fit }]} numberOfLines={1}>
         {player.name}
       </Text>
-      <Text style={[styles.score, { fontSize: 44 * fit }]} accessibilityLabel={`${player.score} points`}>
+      <Text style={[styles.score, { fontSize: 44 * fit }]} accessibilityLabel={t.points(player.score)}>
         {player.score}
       </Text>
       {!!hint && <Text style={[styles.hint, { fontSize: 15 * fit }]}>{hint}</Text>}

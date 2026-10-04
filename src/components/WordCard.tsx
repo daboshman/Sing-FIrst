@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { useI18n } from '../i18n/I18nContext';
 import { colors } from '../theme';
 
 type Props = {
@@ -7,13 +8,14 @@ type Props = {
 };
 
 export function WordCard({ word, scale }: Props) {
+  const { t } = useI18n();
   return (
     <View style={[styles.card, { paddingVertical: 14 * scale, paddingHorizontal: 20 * scale, borderRadius: 24 * scale }]}>
-      <Text style={[styles.prompt, { fontSize: 15 * scale }]}>Sing a song with the word</Text>
+      <Text style={[styles.prompt, { fontSize: 15 * scale }]}>{t.singAWord}</Text>
       <Text
         style={[styles.word, { fontSize: 52 * scale }]}
         numberOfLines={1}
-        accessibilityLabel={`Target word: ${word}`}
+        accessibilityLabel={t.targetWord(word)}
       >
         {word.toUpperCase()}
       </Text>

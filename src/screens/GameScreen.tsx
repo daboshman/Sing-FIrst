@@ -10,11 +10,11 @@ import { TurnPanel, type Phase, type ResultKind } from '../components/TurnPanel'
 import { WordCard } from '../components/WordCard';
 import { pickRandomWord, type WordLanguage, type WordMode } from '../data/words';
 import { useRecorder } from '../hooks/useRecorder';
+import { useI18n } from '../i18n/I18nContext';
 import { identifySong } from '../services/identifySong';
-import { transcribeAudio } from '../services/transcribe';
+import { TranscriptionError, transcribeAudio } from '../services/transcribe';
 import { colors, useScale } from '../theme';
 import type { Player } from '../types';
-import { isolate } from '../utils/bidi';
 import { transcriptContainsWord } from '../utils/matchWord';
 
 const MAX_SINGING_MS = 30_000;
@@ -33,6 +33,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers, wordMode }
   // Vertical space is precious here — the buzzers must fit without scrolling.
   const scale = Math.max(0.85, Math.min(baseScale, height / 600));
   const { permission, requestPermission, startRecording, stopRecording } = useRecorder();
+  const { t } = useI18n();
 
   const [currentWord, setCurrentWord] = useState(() => pickRandomWord(wordMode));
   const [phase, setPhase] = useState<Phase>('idle');
@@ -108,7 +109,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers, wordMode }
     }
     if (!uri || !playerId) {
       lockedRef.current = false;
-      showResult('error', 'The recording failed — no points lost. Buzz again!');
+      showResult('error', t.recordingFailed);
       return;
     }
 
@@ -118,8 +119,8 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers, wordMode }
         text = await transcribeAudio(uri, currentWord.lang);
       } catch (e) {
         lockedRef.current = false;
-        const reason = e instanceof Error ? e.message : 'Something went wrong.';
-        showResult('error', `${reason} No points lost.`);
+        const reason = e instanceof TranscriptionError ? t.errors[e.kind] : t.errors.failed;
+        showResult('error', `${reason} ${t.noPointsLost}`);
         return;
       }
     }
@@ -129,19 +130,14 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers, wordMode }
     const hit = transcriptContainsWord(text, currentWord.text);
     onChangePlayers((ps) => ps.map((p) => (p.id === playerId ? { ...p, score: p.score + (hit ? 1 : -1) } : p)));
 
-    const name = isolate(player?.name ?? 'Player');
+    const name = player?.name ?? '?';
     if (hit) {
-      showResult('success', `🎉 ${name} got it! +1`);
+      showResult('success', t.gotIt(name));
       setWaitingForNextWord(true);
       // Stay locked until the new word appears.
       nextWordTimer.current = setTimeout(nextWord, NEXT_WORD_DELAY_MS);
     } else {
-      showResult(
-        'failure',
-        text
-          ? `😬 No “${isolate(currentWord.text)}” there — ${name} loses a point. Anyone else?`
-          : `😬 I didn't hear any singing — ${name} loses a point.`,
-      );
+      showResult('failure', text ? t.missedWord(currentWord.text, name) : t.heardNothing(name));
       lockedRef.current = false; // same word, everyone can buzz again
     }
   };
@@ -183,20 +179,24 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers, wordMode }
     setFeedbackMessage('');
     songRoundRef.current++;
     setSongLookup({ status: 'idle' });
+    // Show the singing state right away — don't make the player wait for
+    // the recorder before they see their buzz registered.
+    startedAtRef.current = Date.now();
+    setPhase('singing');
 
     try {
       await startRecording();
-    } catch (e) {
+    } catch {
       lockedRef.current = false;
       setSingerId(null);
-      showResult('error', e instanceof Error ? e.message : 'Could not start the microphone.');
-      if (permission !== 'granted') setMicHelpOpen(true);
+      showResult('error', t.micNeeded);
+      setMicHelpOpen(true);
       return;
     }
 
-    recordingRef.current = true;
+    // Time the 30 seconds from when the microphone actually started.
     startedAtRef.current = Date.now();
-    setPhase('singing');
+    recordingRef.current = true;
     autoStopTimer.current = setTimeout(() => finishRef.current(), MAX_SINGING_MS);
   };
 
@@ -218,7 +218,7 @@ export function GameScreen({ players, onChangePlayers, onEditPlayers, wordMode }
 
           {permission === 'denied' && (
             <Text style={[styles.warning, { fontSize: 15 * scale }]} onPress={() => setMicHelpOpen(true)}>
-              🎙️ The microphone is off. Tap here to see how to turn it on.
+              {t.micOffBanner}
             </Text>
           )}
 

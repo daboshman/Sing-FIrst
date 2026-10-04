@@ -12,6 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { WordMode } from '../data/words';
+import { useI18n } from '../i18n/I18nContext';
+import type { UiLanguage } from '../i18n/strings';
 import { colors, useScale } from '../theme';
 import { createPlayer, MAX_PLAYERS, type Player } from '../types';
 
@@ -20,17 +22,22 @@ type Props = {
   onChangePlayers: (update: (players: Player[]) => Player[]) => void;
   wordMode: WordMode;
   onChangeWordMode: (mode: WordMode) => void;
+  uiLanguage: UiLanguage;
+  onChangeUiLanguage: (lang: UiLanguage) => void;
   onStart: () => void;
 };
 
-const WORD_MODES: { mode: WordMode; label: string }[] = [
-  { mode: 'en', label: 'English' },
-  { mode: 'he', label: 'עברית' },
-  { mode: 'mix', label: 'Both · שניהם' },
-];
-
-export function SetupScreen({ players, onChangePlayers, wordMode, onChangeWordMode, onStart }: Props) {
+export function SetupScreen({
+  players,
+  onChangePlayers,
+  wordMode,
+  onChangeWordMode,
+  uiLanguage,
+  onChangeUiLanguage,
+  onStart,
+}: Props) {
   const { scale } = useScale();
+  const { t, isRTL } = useI18n();
   const [name, setName] = useState('');
   const inputRef = useRef<TextInput>(null);
 
@@ -57,30 +64,25 @@ export function SetupScreen({ players, onChangePlayers, wordMode, onChangeWordMo
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={[styles.column, { gap: 20 * scale, paddingHorizontal: 16 * scale }]}>
             <Text style={[styles.title, { fontSize: 40 * scale }]} accessibilityRole="header">
-              🎤 Sing First
+              {t.appName}
             </Text>
-            <Text style={[styles.intro, { fontSize: 16 * scale, lineHeight: 23 * scale }]}>
-              Put the device in the middle of the table. When a word appears, the first player to tap their button
-              has 30 seconds to sing a song with that word.
-            </Text>
+            <Text style={[styles.intro, { fontSize: 16 * scale, lineHeight: 23 * scale }]}>{t.intro}</Text>
             <View style={[styles.rules, { gap: 10 * scale }]}>
-              <Text style={[styles.rule, styles.ruleGood, { fontSize: 15 * scale }]}>+1 sang the word</Text>
-              <Text style={[styles.rule, styles.ruleBad, { fontSize: 15 * scale }]}>−1 didn't</Text>
+              <Text style={[styles.rule, styles.ruleGood, { fontSize: 15 * scale }]}>{t.ruleGood}</Text>
+              <Text style={[styles.rule, styles.ruleBad, { fontSize: 15 * scale }]}>{t.ruleBad}</Text>
             </View>
 
             <View style={[styles.card, { padding: 18 * scale, borderRadius: 22 * scale, gap: 10 * scale }]}>
-              <Text style={[styles.label, { fontSize: 13 * scale }]}>
-                PLAYERS ({players.length}/{MAX_PLAYERS})
-              </Text>
+              <Text style={[styles.label, { fontSize: 13 * scale }]}>{t.playersLabel(players.length, MAX_PLAYERS)}</Text>
 
               {players.length === 0 && (
-                <Text style={[styles.muted, { fontSize: 15 * scale }]}>Add at least one player to start.</Text>
+                <Text style={[styles.muted, { fontSize: 15 * scale }]}>{t.noPlayersYet}</Text>
               )}
 
               {players.map((p) => (
                 <View key={p.id} style={[styles.playerRow, { paddingVertical: 10 * scale, paddingHorizontal: 14 * scale }]}>
                   <View style={[styles.dot, { backgroundColor: p.color, width: 16 * scale, height: 16 * scale }]} />
-                  <Text style={[styles.playerName, { fontSize: 18 * scale }]} numberOfLines={1}>
+                  <Text style={[styles.playerName, { fontSize: 18 * scale, textAlign: isRTL ? 'right' : 'left' }]} numberOfLines={1}>
                     {p.name}
                   </Text>
                   <Text style={[styles.playerScore, { fontSize: 16 * scale }]}>{p.score}</Text>
@@ -88,7 +90,7 @@ export function SetupScreen({ players, onChangePlayers, wordMode, onChangeWordMo
                     onPress={() => removePlayer(p.id)}
                     hitSlop={10}
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove ${p.name}`}
+                    accessibilityLabel={t.removePlayer(p.name)}
                     style={({ pressed }) => [styles.remove, pressed && styles.pressed]}
                   >
                     <Text style={[styles.removeText, { fontSize: 18 * scale }]}>✕</Text>
@@ -101,7 +103,7 @@ export function SetupScreen({ players, onChangePlayers, wordMode, onChangeWordMo
                   ref={inputRef}
                   value={name}
                   onChangeText={setName}
-                  placeholder={full ? 'Table is full!' : 'Player name'}
+                  placeholder={full ? t.tableFull : t.playerNamePlaceholder}
                   placeholderTextColor={colors.textMuted}
                   maxLength={20}
                   editable={!full}
@@ -113,7 +115,7 @@ export function SetupScreen({ players, onChangePlayers, wordMode, onChangeWordMo
                   blurOnSubmit={false}
                   onSubmitEditing={(e) => addPlayer(e.nativeEvent.text)}
                   style={[styles.input, { fontSize: 18 * scale, padding: 14 * scale }]}
-                  accessibilityLabel="New player name"
+                  accessibilityLabel={t.newPlayerName}
                 />
                 <Pressable
                   onPress={() => addPlayer()}
@@ -126,38 +128,26 @@ export function SetupScreen({ players, onChangePlayers, wordMode, onChangeWordMo
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={[styles.addText, { fontSize: 17 * scale }]}>＋ Add</Text>
+                  <Text style={[styles.addText, { fontSize: 17 * scale }]}>{t.addPlayer}</Text>
                 </Pressable>
               </View>
             </View>
 
             <View style={[styles.card, { padding: 18 * scale, borderRadius: 22 * scale, gap: 10 * scale }]}>
-              <Text style={[styles.label, { fontSize: 13 * scale }]}>WORDS & SONGS</Text>
-              <View style={[styles.segment, { borderRadius: 14 * scale }]} accessibilityRole="radiogroup">
-                {WORD_MODES.map(({ mode, label }) => {
-                  const selected = mode === wordMode;
-                  return (
-                    <Pressable
-                      key={mode}
-                      onPress={() => onChangeWordMode(mode)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      style={[
-                        styles.segmentItem,
-                        { paddingVertical: 12 * scale, borderRadius: 11 * scale },
-                        selected && styles.segmentSelected,
-                      ]}
-                    >
-                      <Text
-                        style={[styles.segmentText, { fontSize: 16 * scale }, selected && styles.segmentTextSelected]}
-                        numberOfLines={1}
-                      >
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <Text style={[styles.label, { fontSize: 13 * scale }]}>{t.wordsLabel}</Text>
+              <Segmented
+                options={(['en', 'he', 'mix'] as const).map((mode) => ({ value: mode, label: t.wordModes[mode] }))}
+                value={wordMode}
+                onChange={onChangeWordMode}
+                scale={scale}
+              />
+              <Text style={[styles.label, { fontSize: 13 * scale, marginTop: 8 * scale }]}>{t.uiLanguageLabel}</Text>
+              <Segmented
+                options={(['en', 'he'] as const).map((l) => ({ value: l, label: t.uiLanguages[l] }))}
+                value={uiLanguage}
+                onChange={onChangeUiLanguage}
+                scale={scale}
+              />
             </View>
 
             <Pressable
@@ -171,18 +161,58 @@ export function SetupScreen({ players, onChangePlayers, wordMode, onChangeWordMo
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={[styles.startText, { fontSize: 22 * scale }]}>Start game 🎶</Text>
+              <Text style={[styles.startText, { fontSize: 22 * scale }]}>{t.startGame}</Text>
             </Pressable>
 
             {hasScores && (
               <Pressable onPress={resetScores} accessibilityRole="button" hitSlop={8}>
-                <Text style={[styles.reset, { fontSize: 15 * scale }]}>Reset all scores to 0</Text>
+                <Text style={[styles.reset, { fontSize: 15 * scale }]}>{t.resetScores}</Text>
               </Pressable>
             )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  scale,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  scale: number;
+}) {
+  return (
+    <View style={[styles.segment, { borderRadius: 14 * scale }]} accessibilityRole="radiogroup">
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            onPress={() => onChange(option.value)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            style={[
+              styles.segmentItem,
+              { paddingVertical: 12 * scale, borderRadius: 11 * scale },
+              selected && styles.segmentSelected,
+            ]}
+          >
+            <Text
+              style={[styles.segmentText, { fontSize: 16 * scale }, selected && styles.segmentTextSelected]}
+              numberOfLines={1}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -259,7 +289,6 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontWeight: '800',
-    textAlign: 'left',
   },
   playerScore: {
     color: colors.card,

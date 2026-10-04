@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme';
-import { isolate } from '../utils/bidi';
+import { useI18n } from '../i18n/I18nContext';
 import { SongCard, type SongLookup } from './SongCard';
 import type { Player } from '../types';
 
@@ -41,44 +41,45 @@ export function TurnPanel({
   onDone,
   onSkip,
 }: Props) {
+  const { t, dir } = useI18n();
   const seconds = Math.ceil(remainingMs / 1000);
+  // Sentences follow the UI direction; names/lyrics inside are isolated.
+  const headline = [styles.headline, { writingDirection: dir }];
 
   return (
     <View style={[styles.panel, { minHeight: 120 * scale, padding: 14 * scale, borderRadius: 20 * scale }]}>
       {phase === 'idle' && (
-        <Text style={[styles.headline, { fontSize: 22 * scale }]}>First to tap their button sings! 🎤</Text>
+        <Text style={[headline, { fontSize: 22 * scale }]}>{t.firstToTap}</Text>
       )}
 
       {phase === 'singing' && singer && (
         <>
-          <Text style={[styles.headline, { fontSize: 22 * scale }]}>
-            <Text style={{ color: singer.color }}>{isolate(singer.name)}</Text> is singing…{' '}
-            <Text style={[styles.countdown, seconds <= 5 && styles.countdownLow]}>{seconds}s</Text>
+          <Text style={[headline, { fontSize: 22 * scale }]}>
+            <Text style={{ color: singer.color }}>{t.isSinging(singer.name)}</Text>{' '}
+            <Text style={[styles.countdown, seconds <= 5 && styles.countdownLow]}>{t.secondsLeft(seconds)}</Text>
           </Text>
-          <ActionButton label="⏹ Done singing" color={colors.record} scale={scale} onPress={onDone} />
+          <ActionButton label={t.doneSinging} color={colors.record} scale={scale} onPress={onDone} />
         </>
       )}
 
       {phase === 'processing' && (
         <View style={styles.row}>
           <ActivityIndicator color={colors.text} />
-          <Text style={[styles.headline, { fontSize: 20 * scale }]}>
-            Listening to {isolate(singer?.name ?? 'the singer')}…
-          </Text>
+          <Text style={[headline, { fontSize: 20 * scale }]}>{t.listeningTo(singer?.name ?? '')}</Text>
         </View>
       )}
 
       {phase === 'result' && resultKind && (
         <>
           <Text
-            style={[styles.headline, { fontSize: 22 * scale, color: RESULT_COLOR[resultKind] }]}
+            style={[headline, { fontSize: 22 * scale, color: RESULT_COLOR[resultKind] }]}
             accessibilityLiveRegion="assertive"
           >
             {message}
           </Text>
           {!!transcript && (
-            <Text style={[styles.transcript, { fontSize: 16 * scale }]} numberOfLines={3}>
-              Heard: “{isolate(transcript)}”
+            <Text style={[styles.transcript, { fontSize: 16 * scale, writingDirection: dir }]} numberOfLines={3}>
+              {t.heard(transcript)}
             </Text>
           )}
         </>
@@ -86,11 +87,11 @@ export function TurnPanel({
 
       {/* One instance across result → idle, so it keeps its state when the next word appears. */}
       {(phase === 'idle' || phase === 'result') && (
-        <SongCard lookup={songLookup} label={phase === 'idle' ? 'LAST SONG' : 'THAT WAS'} scale={scale} />
+        <SongCard lookup={songLookup} label={phase === 'idle' ? t.lastSong : t.thatWas} scale={scale} />
       )}
 
       {canSkip && (phase === 'idle' || phase === 'result') && (
-        <ActionButton label="⏭ Skip word" color={colors.buttonSecondary} scale={scale} onPress={onSkip} />
+        <ActionButton label={t.skipWord} color={colors.buttonSecondary} scale={scale} onPress={onSkip} />
       )}
     </View>
   );
@@ -141,9 +142,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '900',
     textAlign: 'center',
-    // English sentences that may contain Hebrew names/words: keep them LTR
-    // (the Hebrew parts are wrapped with isolate()).
-    writingDirection: 'ltr',
   },
   countdown: {
     color: colors.card,
@@ -156,7 +154,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontStyle: 'italic',
     textAlign: 'center',
-    writingDirection: 'ltr',
   },
   button: {
     borderRadius: 999,

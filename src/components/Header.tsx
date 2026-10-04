@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useI18n } from '../i18n/I18nContext';
 import { colors } from '../theme';
 
 type Props = {
@@ -8,10 +9,11 @@ type Props = {
 };
 
 export function Header({ scale, playersDisabled, onEditPlayers }: Props) {
+  const { t } = useI18n();
   return (
     <View style={styles.row}>
       <Text style={[styles.title, { fontSize: 26 * scale }]} accessibilityRole="header">
-        🎤 Sing First
+        {t.appName}
       </Text>
       <Pressable
         onPress={onEditPlayers}
@@ -25,7 +27,7 @@ export function Header({ scale, playersDisabled, onEditPlayers }: Props) {
           pressed && styles.pressed,
         ]}
       >
-        <Text style={[styles.buttonText, { fontSize: 15 * scale }]}>👥 Players</Text>
+        <Text style={[styles.buttonText, { fontSize: 15 * scale }]}>{t.settingsButton}</Text>
       </Pressable>
     </View>
   );

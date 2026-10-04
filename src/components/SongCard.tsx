@@ -9,6 +9,7 @@ import {
   type Song,
 } from '../services/identifySong';
 import { colors } from '../theme';
+import { useI18n } from '../i18n/I18nContext';
 import { isolate } from '../utils/bidi';
 import { openMusicLink, openWebsite } from '../utils/openMusicLink';
 
@@ -28,6 +29,7 @@ type Props = {
 type Service = { name: string; webUrl: string };
 
 export function SongCard({ lookup, label, scale }: Props) {
+  const { t, dir } = useI18n();
   // Set when the app isn't installed, to offer the website instead.
   const [missingApp, setMissingApp] = useState<Service | null>(null);
   const song = lookup.status === 'done' ? lookup.song : null;
@@ -46,13 +48,13 @@ export function SongCard({ lookup, label, scale }: Props) {
     return (
       <View style={[styles.card, styles.row, { padding: 10 * scale, borderRadius: 14 * scale }]}>
         <ActivityIndicator color={colors.textMuted} size="small" />
-        <Text style={[styles.muted, { fontSize: 15 * scale }]}>🎵 Which song was that…</Text>
+        <Text style={[styles.muted, { fontSize: 15 * scale }]}>{t.whichSong}</Text>
       </View>
     );
   }
 
   if (!song && !query) {
-    return <Text style={[styles.muted, { fontSize: 14 * scale }]}>🎵 Couldn't recognize the song</Text>;
+    return <Text style={[styles.muted, { fontSize: 14 * scale }]}>{t.songUnknown}</Text>;
   }
 
   // Search terms: "title artist" for an identified song, else the first
@@ -61,13 +63,13 @@ export function SongCard({ lookup, label, scale }: Props) {
 
   return (
     <View style={[styles.card, { padding: 12 * scale, borderRadius: 16 * scale, gap: 8 * scale }]}>
-      <Text style={[styles.label, { fontSize: 12 * scale }]}>{song ? label : 'FIND THIS SONG'}</Text>
+      <Text style={[styles.label, { fontSize: 12 * scale }]}>{song ? label : t.findThisSong}</Text>
       {song ? (
-        <Text style={[styles.title, { fontSize: 18 * scale }]} numberOfLines={2}>
+        <Text style={[styles.title, { fontSize: 18 * scale, writingDirection: dir }]} numberOfLines={2}>
           🎵 {isolate(song.title)} <Text style={styles.artist}>— {isolate(song.artist)}</Text>
         </Text>
       ) : (
-        <Text style={[styles.title, styles.lyrics, { fontSize: 16 * scale }]} numberOfLines={2}>
+        <Text style={[styles.title, styles.lyrics, { fontSize: 16 * scale, writingDirection: dir }]} numberOfLines={2}>
           🔎 “{isolate(terms)}”
         </Text>
       )}
@@ -87,9 +89,9 @@ export function SongCard({ lookup, label, scale }: Props) {
       </View>
       {missingApp && (
         <Text style={[styles.muted, { fontSize: 14 * scale }]}>
-          No {missingApp.name} app found.{' '}
+          {t.appMissing(missingApp.name)}{' '}
           <Text style={styles.webLink} onPress={() => openWebsite(missingApp.webUrl)} accessibilityRole="link">
-            Open the {missingApp.name} website
+            {t.openWebsite(missingApp.name)}
           </Text>
         </Text>
       )}
@@ -144,7 +146,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '900',
     textAlign: 'center',
-    writingDirection: 'ltr', // Hebrew parts are wrapped with isolate()
   },
   lyrics: {
     fontWeight: '700',

@@ -1,7 +1,8 @@
 import { Linking, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useI18n } from '../i18n/I18nContext';
 import { colors } from '../theme';
-import { getMicHelp } from '../utils/micHelp';
+import { detectMicHelp } from '../utils/micHelp';
 
 type Props = {
   visible: boolean;
@@ -11,7 +12,9 @@ type Props = {
 };
 
 export function MicHelpModal({ visible, scale, onTryAgain, onClose }: Props) {
-  const help = getMicHelp();
+  const { t, dir } = useI18n();
+  const { key, canOpenSettings } = detectMicHelp();
+  const help = t.micHelp[key];
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -20,7 +23,7 @@ export function MicHelpModal({ visible, scale, onTryAgain, onClose }: Props) {
           <Text style={[styles.emoji, { fontSize: 44 * scale }]}>🎙️</Text>
           <Text style={[styles.title, { fontSize: 22 * scale }]}>{help.title}</Text>
           <Text style={[styles.body, { fontSize: 15 * scale, lineHeight: 22 * scale }]}>
-            Sing First needs the microphone to hear you sing.
+            {t.micNeedsAccess}
           </Text>
 
           <View style={{ gap: 10 * scale }}>
@@ -29,22 +32,26 @@ export function MicHelpModal({ visible, scale, onTryAgain, onClose }: Props) {
                 <Text style={[styles.stepNumber, { fontSize: 14 * scale, width: 26 * scale, height: 26 * scale, lineHeight: 26 * scale }]}>
                   {i + 1}
                 </Text>
-                <Text style={[styles.stepText, { fontSize: 16 * scale, lineHeight: 23 * scale }]}>{step}</Text>
+                <Text style={[styles.stepText, { fontSize: 16 * scale, lineHeight: 23 * scale, writingDirection: dir }]}>
+                  {step}
+                </Text>
               </View>
             ))}
           </View>
 
           {help.tip && (
-            <Text style={[styles.tip, { fontSize: 14 * scale, lineHeight: 20 * scale }]}>💡 {help.tip}</Text>
+            <Text style={[styles.tip, { fontSize: 14 * scale, lineHeight: 20 * scale, writingDirection: dir }]}>
+              💡 {help.tip}
+            </Text>
           )}
 
           <View style={[styles.buttons, { gap: 10 * scale }]}>
-            <Button label="Try again" primary scale={scale} onPress={onTryAgain} />
-            {help.canOpenSettings && <Button label="Open Settings" scale={scale} onPress={() => Linking.openSettings()} />}
+            <Button label={t.tryAgain} primary scale={scale} onPress={onTryAgain} />
+            {canOpenSettings && <Button label={t.openSettings} scale={scale} onPress={() => Linking.openSettings()} />}
             {Platform.OS === 'web' && (
-              <Button label="Reload page" scale={scale} onPress={() => window.location.reload()} />
+              <Button label={t.reloadPage} scale={scale} onPress={() => window.location.reload()} />
             )}
-            <Button label="Close" scale={scale} onPress={onClose} />
+            <Button label={t.close} scale={scale} onPress={onClose} />
           </View>
         </View>
       </View>

@@ -3,12 +3,12 @@ import { Platform } from 'react-native';
 import { TRANSCRIBE_URL } from '../config';
 import type { WordLanguage } from '../data/words';
 
+export type TranscriptionErrorKind = 'network' | 'rate' | 'quota' | 'failed';
+
+/** `kind` lets the UI show the message in the player's language. */
 export class TranscriptionError extends Error {
-  constructor(
-    message: string,
-    public readonly status?: number,
-  ) {
-    super(message);
+  constructor(public readonly kind: TranscriptionErrorKind) {
+    super(kind);
     this.name = 'TranscriptionError';
   }
 }
@@ -65,18 +65,11 @@ export async function transcribeAudio(uri: string, language: WordLanguage): Prom
     // Don't set Content-Type — fetch adds the multipart boundary itself.
     response = await fetch(TRANSCRIBE_URL, { method: 'POST', body: form });
   } catch {
-    throw new TranscriptionError('Network error — check your connection and try again.');
+    throw new TranscriptionError('network');
   }
 
   if (!response.ok) {
-    let message = `Transcription failed (${response.status}).`;
-    try {
-      const body = await response.json();
-      if (body?.error) message = body.error;
-    } catch {
-      // Non-JSON error body; keep the generic message.
-    }
-    throw new TranscriptionError(message, response.status);
+    throw new TranscriptionError(response.status === 429 ? 'rate' : response.status === 503 ? 'quota' : 'failed');
   }
 
   const data: { text?: string } = await response.json();
